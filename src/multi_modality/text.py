@@ -85,5 +85,25 @@ LABELS_2_TEXT = {
         'Clears heat, resolves toxin, eliminates swelling, disperses stasis, dispels wind heat, also called ‘premier of sore medicines’. Apply to warm heat diseases, erysipelas, rashes, abscess swelling pain, scrofula, pyretic stranguria and uroschesis, heart fire.',
         'Fruits and seeds'
     ],
-    
+    'Gardeniae_Fructus': [
+        'Primarily produced in the Chinese provinces of Hubei, Hunan, Jiangxi, Fujian.',
+        'Superior medicinal material has thin skin, full, reddish-yellow color.',
+        'Bitter, cold.',
+        'Drains fire, eliminates vexation, clears heat, promotes urination, cools blood, resolves toxin. Apply to deficient restlessness due to pyreticosis, conjunctival congestion due to liver fire, headache, jaundice due to damp-heat, strangury, hematodiarrhoea, hematuria, mouth and tongue sore, swelling pain of sore and ulcer, swelling pains caused by sprains.',
+        'Fruits and seeds'
+    ],
+    'Kochiae_Fructus': [
+        'Primarily produced in the Chinese provinces of Jiangsu, Henan, Hebei, Shandong.',
+        'Superior medicinal material is grayish-green and full.',
+        'Acrid, bitter; cold.',
+        'Clears heat, disinhibits dampness, dispels wind and relieves itching. Apply to astringent pain when urinating, vaginal discharge and itch, wind rash, eczema, skin itching.',
+        'Fruits and seeds'
+    ],
+    'Lycii_Fructus': [
+        'Primarily produced in the Chinese provinces of Gansu, Ningxia, Xinjiang, Inner Mongolia, Qinghai.',
+        'Superior medicinal material is full and fleshy with fresh color.',
+        'Sweet; neutral.',
+        'Supplements the liver and kidney, boosts essence and brightens the eyes.',
+        'Fruits and seeds'
+    ],
 }
