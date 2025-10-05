@@ -113,4 +113,11 @@ LABELS_2_TEXT = {
         'Astringes lung, astringes intestines, engenders fluid, calms worms. Apply to pulmonary deficiency due to long term cough, lingering dysentery and diarrhea, asthenic fever and diabetes, vomiting and abdominal pain due to ascariasis, ascariasis of creeping figary tract.',
         'Fruits and seeds'
     ],
+    'Persicae_Semen': [
+        'Primarily produced in the Chinese provinces of Beijing, Hebei, Shaanxi.',
+        'Superior medicinal material has even kernels, reddish-brown color, full seed.',
+        'Bitter, sweet, neutral.',
+        'Invigorates blood, dispels stasis, moistens intestines, frees stools, relieves cough, calms panting. Apply to amenorrhea, dysmenorrhea, abdominal mass, injury from falls, and constipation due to dryness of intestines.',
+        'Fruits and seeds'
+    ],
 }
