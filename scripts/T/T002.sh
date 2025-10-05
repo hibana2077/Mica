@@ -15,4 +15,4 @@ source /scratch/rp06/sl5952/Mica/.venv/bin/activate
 
 cd ../..
 
-python3 src/run.py --train_dir dataset/Dataset_1_Cleaned --test_dir dataset/Dataset_2_Cleaned --output_dir output/T002 --seed 42 --lr 4e-4 --model_name deit_tiny_distilled_patch16_224.fb_in1k --no_amp --no_tqdm >> output/T002/log.txt 2>&1
+python3 src/run.py --train_dir dataset/Dataset_1_Cleaned --test_dir dataset/Dataset_2_Cleaned --output_dir output/T002 --seed 42 --lr 4e-4 --model_name deit_tiny_distilled_patch16_224.fb_in1k --no_amp --no_tqdm >> T002.log 2>&1
