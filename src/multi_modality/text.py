@@ -148,4 +148,18 @@ LABELS_2_TEXT = {
         'Astringes and secures, boosts qi, engenders fluid, supplements kidney, calms heart. Apply to lingering cough and dyspnea due to deficiency, nocturnal emissions and spermatorrhoea, anischuria and urinary frequency, lingering diarrhea, spontaneous perspiration, night sweat, hydrodipsia due to depletion of body fluids, shortness of breath and feeble pulse, feverish dysphoria and diabetes, palpitation and insomnia.',
         'Fruits and seeds'
     ],
+    'Toosendan_Fructus': [
+        'Primarily produced in Chinese provinces of Sichuan, Gansu, Hubei, Guizhou, Yunnan.',
+        'Superior medicinal material is large piece with golden yellow skin and yellowish-white flesh, which are full and elastic in nature.',
+        'Bitter; cold; slightly toxic.',
+        'Soothes the liver, moves qi, relieves pain, expels worms. Apply to swelling pain of chest and abdomen, hernia pain, enterozoic abdominalgia.',
+        'Fruits and seeds'
+    ],
+    'Trichosanthis_Pericarpoium': [
+        'Primarily produced in the Chinese provinces of Hebei, Henan, Shandong.',
+        'Superior medicinal material is full, pale yellowish-white, whole and unbroken, without oil diffused, without shell.',
+        'Sweet, bitter; cold.',
+        'Moistens the lung, transforms phlegm, disperses binds, moistens the intestines. Apply to cough due the heat phlegm, chest impediment, thoracic obstruction, consumptive lung with hemoptysis, diabetes, jaundice, constipation, early welling-abscess swelling.',
+        'Fruits and seeds'
+    ]
 }
