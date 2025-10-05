@@ -106,4 +106,11 @@ LABELS_2_TEXT = {
         'Supplements the liver and kidney, boosts essence and brightens the eyes.',
         'Fruits and seeds'
     ],
+    'Mume_Fructus': [
+        'Primarily produced in the Chinese provinces of Shanxi, Henan, Hebei, Shandong.',
+        'Superior medicinal material is large, thick, soft and moist, very sour.',
+        'Sour, astringent, neutral.',
+        'Astringes lung, astringes intestines, engenders fluid, calms worms. Apply to pulmonary deficiency due to long term cough, lingering dysentery and diarrhea, asthenic fever and diabetes, vomiting and abdominal pain due to ascariasis, ascariasis of creeping figary tract.',
+        'Fruits and seeds'
+    ],
 }
