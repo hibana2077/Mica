@@ -39,6 +39,7 @@ from utils import (
     build_model,
     evaluate,
     apply_mixup,
+    compute_model_complexity,
 )
 from utils.data import accuracy
 
@@ -183,6 +184,17 @@ def main():
 
     train_loader, test_loader, class_names = build_dataloaders(cfg, model)
     print(f"Classes ({len(class_names)}): {class_names}")
+    
+    # Compute model complexity (MACs, FLOPs, Params)
+    print("\nComputing model complexity...")
+    complexity = compute_model_complexity(model, input_size=(1, 3, 224, 224), device=device)
+    print(f"Model Complexity:")
+    print(f"  - Parameters: {complexity['params']:.2f}M")
+    print(f"  - MACs: {complexity['macs']:.2f}M")
+    print(f"  - FLOPs: {complexity['flops']:.2f}M")
+    
+    # Save complexity metrics
+    save_json(os.path.join(cfg.output_dir, "model_complexity.json"), complexity)
 
     # Criterion with label smoothing
     criterion = nn.CrossEntropyLoss(label_smoothing=cfg.label_smoothing)
@@ -200,6 +212,10 @@ def main():
     best_acc = -1.0
     epochs_no_improve = 0
     log_path = os.path.join(cfg.output_dir, "train_log.jsonl")
+    
+    # Clear/create new log file at the start of training
+    with open(log_path, "w", encoding="utf-8") as jf:
+        pass  # Create empty file or clear existing one
 
     for epoch in range(1, cfg.epochs + 1):
         print(f"\nEpoch {epoch}/{cfg.epochs}")
@@ -249,20 +265,37 @@ def main():
         train_loss = running_loss / len(train_loader.dataset)
         train_acc = running_top1 / len(train_loader.dataset)
 
-        # Validation on test_dir
-        val_loss, val_acc = evaluate(model, test_loader, criterion, device, cfg.use_tqdm)
+        # Validation on test_dir with detailed metrics
+        val_metrics = evaluate(model, test_loader, criterion, device, cfg.use_tqdm, compute_metrics=True)
+        val_loss = val_metrics["loss"]
+        val_acc = val_metrics["acc"]
+        val_precision = val_metrics.get("precision", 0.0)
+        val_recall = val_metrics.get("recall", 0.0)
+        val_f1 = val_metrics.get("f1", 0.0)
+        val_auc = val_metrics.get("auc", 0.0)
+        
         scheduler.step()
 
-        print(f"Epoch {epoch}: train_loss={train_loss:.4f} train_acc={train_acc:.2f} | val_loss={val_loss:.4f} val_acc={val_acc:.2f}")
+        print(f"Epoch {epoch}: train_loss={train_loss:.4f} train_acc={train_acc:.2f} | "
+              f"val_loss={val_loss:.4f} val_acc={val_acc:.2f} | "
+              f"val_f1={val_f1:.4f} val_prec={val_precision:.4f} val_recall={val_recall:.4f} val_auc={val_auc:.4f}")
 
-        # log
-        save_json(
-            log_path,
-            {"epoch": epoch, "train_loss": train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc},
-        )  # this overwrites - keep a single last snapshot
-        # also append a jsonl for history
-        with open(os.path.join(cfg.output_dir, "train_log.jsonl"), "a", encoding="utf-8") as jf:
-            jf.write(json.dumps({"epoch": epoch, "train_loss": train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc}) + "\n")
+        # log with all metrics
+        epoch_log = {
+            "epoch": epoch,
+            "train_loss": train_loss,
+            "train_acc": train_acc,
+            "val_loss": val_loss,
+            "val_acc": val_acc,
+            "val_precision": val_precision,
+            "val_recall": val_recall,
+            "val_f1": val_f1,
+            "val_auc": val_auc,
+        }
+        
+        # Append to jsonl for history
+        with open(log_path, "a", encoding="utf-8") as jf:
+            jf.write(json.dumps(epoch_log) + "\n")
 
         # Early stopping & checkpointing
         improved = val_acc > best_acc
@@ -276,10 +309,19 @@ def main():
                 "optimizer_state": optimizer.state_dict(),
                 "scheduler_state": scheduler.state_dict(),
                 "best_acc": best_acc,
+                "best_metrics": {
+                    "val_acc": val_acc,
+                    "val_precision": val_precision,
+                    "val_recall": val_recall,
+                    "val_f1": val_f1,
+                    "val_auc": val_auc,
+                    "val_loss": val_loss,
+                },
+                "model_complexity": complexity,
                 "class_names": class_names,
                 "config": asdict(cfg),
             }, ckpt_path)
-            print(f"Saved best model to {ckpt_path} (acc={best_acc:.2f})")
+            print(f"Saved best model to {ckpt_path} (acc={best_acc:.2f}, f1={val_f1:.4f})")
         else:
             epochs_no_improve += 1
 

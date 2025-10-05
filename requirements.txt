@@ -46,6 +46,10 @@ seaborn
 # Computer Vision
 opencv-python
 
+# Model profiling
+thop  # For FLOPs and MACs calculation
+fvcore  # Alternative for FLOPs calculation
+
 # Optional dependencies for advanced features
 # wandb>=0.12.0  # For experiment tracking (uncomment if needed)
 umap-learn>=0.5.0  # For UMAP visualization
