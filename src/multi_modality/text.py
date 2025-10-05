@@ -13,7 +13,7 @@ ALL_LABELS = ['Alpiniae_Katsumadai_Semen',
               'Mume_Fructus',
               'Persicae_Semen',
               'Psoraleae_Fructus',
-              'Rosae_Laevigatae_Frucyus',
+              'Rosae_Laevigatae_Frucyus', # should be Rosae_Laevigatae_Fructus
               'Rubi_Fructus',
               'Schisandrae_Chinensis_Fructus',
               'Toosendan_Fructus',
@@ -120,4 +120,26 @@ LABELS_2_TEXT = {
         'Invigorates blood, dispels stasis, moistens intestines, frees stools, relieves cough, calms panting. Apply to amenorrhea, dysmenorrhea, abdominal mass, injury from falls, and constipation due to dryness of intestines.',
         'Fruits and seeds'
     ],
+    "Psoraleae_Fructus": [
+        "Primarily produced in Chinese provinces of Henan, Sichuan, Anhui.",
+        "Superior medicinal material is large, full, black.",
+        "Acrid, bitter; warm.",
+        "Warms kidney, assists yang, promotes qi absorption, regulates gasping, warms spleen, relieves diarrhea.",
+        "Fruits and seeds."
+    ],
+    'Rosae_Laevigatae_Frucyus': [
+        'Primarily produced in the Chinese provinces of Jiangxi, Chongqing, Hunan, Hubei.',
+        'Superior medicinal material is large, reddish-yellow, lustrous, and cleaned of all hairy thorns.',
+        'Sour, sweet, astringent; neutral.',
+        'Secures essence, reduces urine, secures the metrorrhagia, relieves vaginal discharge, astringes intestines, stops diarrhea. Apply to emissions and spermatorrhoea, anischuria and urinary frequency, metrorrhagia and metrostaxia, lingering diarrhea and dysentery.',
+        'Fruits and seeds'
+    ],
+    'Rubi_Fructus': [
+        'Primarily produced in the Chinese provinces of Zhejiang, Fujian, Hubei, Anhui, Jiangxi, Guangdong.',
+        'Superior medicinal material is large, full, intact, firm, grayish-brown, without fruit stem.',
+        'Sweet, sour; warm.',
+        'Boosts kidney, secures essence, reduces urine, apply to enuresis due to kidney deficiency, frequent urination, impotence and premature ejaculation, spermatorrhea.',
+        'Fruits and seeds'
+    ],
+
 }
