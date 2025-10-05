@@ -141,5 +141,11 @@ LABELS_2_TEXT = {
         'Boosts kidney, secures essence, reduces urine, apply to enuresis due to kidney deficiency, frequent urination, impotence and premature ejaculation, spermatorrhea.',
         'Fruits and seeds'
     ],
-
+    'Schisandrae_Chinensis_Fructus': [
+        'Primarily produced in the northeastern regions of China.',
+        'Superior medicinal material is purplish-red, large, thick, oily and lustrous.',
+        'Sour, sweet, warm.',
+        'Astringes and secures, boosts qi, engenders fluid, supplements kidney, calms heart. Apply to lingering cough and dyspnea due to deficiency, nocturnal emissions and spermatorrhoea, anischuria and urinary frequency, lingering diarrhea, spontaneous perspiration, night sweat, hydrodipsia due to depletion of body fluids, shortness of breath and feeble pulse, feverish dysphoria and diabetes, palpitation and insomnia.',
+        'Fruits and seeds'
+    ],
 }
