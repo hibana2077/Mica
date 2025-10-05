@@ -1,4 +1,24 @@
-ALL_LABELS = ['Alpiniae_Katsumadai_Semen', 'Amomi_Fructus', 'Amomi_Fructus_Rotundus', 'Armeniacae_Semen_Amarum', 'Chaenomelis_Fructus', 'Corni_Fructus', 'Crataegi_Fructus', 'Foeniculi_Fructus', 'Forsythiae_Fructus', 'Gardeniae_Fructus', 'Kochiae_Fructus', 'Lycii_Fructus', 'Mume_Fructus', 'Persicae_Semen', 'Psoraleae_Fructus', 'Rosae_Laevigatae_Frucyus', 'Rubi_Fructus', 'Schisandrae_Chinensis_Fructus', 'Toosendan_Fructus', 'Trichosanthis_Pericarpoium']
+ALL_LABELS = ['Alpiniae_Katsumadai_Semen',
+              'Amomi_Fructus',
+              'Amomi_Fructus_Rotundus',
+              'Armeniacae_Semen_Amarum',
+              'Chaenomelis_Fructus',
+              'Corni_Fructus',
+              'Crataegi_Fructus',
+              'Foeniculi_Fructus',
+              'Forsythiae_Fructus',
+              'Gardeniae_Fructus',
+              'Kochiae_Fructus',
+              'Lycii_Fructus',
+              'Mume_Fructus',
+              'Persicae_Semen',
+              'Psoraleae_Fructus',
+              'Rosae_Laevigatae_Frucyus',
+              'Rubi_Fructus',
+              'Schisandrae_Chinensis_Fructus',
+              'Toosendan_Fructus',
+              'Trichosanthis_Pericarpoium'
+]
 # 產地, 品質, 性味, 功效
 # Production Regions, Quality Requirements, Properties, Functions, Category
 LABELS_2_TEXT = {
@@ -23,6 +43,47 @@ LABELS_2_TEXT = {
         'Transforms dampness, disperses of local distention, moves qi, warms the center, opens stomach, disperses food. Apply to retention of damp leading to blockage of middle, anorexia, onset of damp thermosis, and fullness due to chest distress, gastrofrigid vomiting, chest and abdominal swelling pain, indigestion.',
         'Fruits and seeds'
     ],
-
-
+    'Armeniacae_Semen_Amarum': [
+        'Primarily produced in the Chinese provinces of Liaoning, Inner Mongolia, Hebei, Shandong.',
+        'Superior ku xing ren consists of consistent kernels, full, intact, with bitter taste.',
+        'Tastes bitter, slightly warm.',
+        'Downbears qi, stops cough, calms panting, moistens intestines, frees stools. Apply to coughing and dyspnea, excessive phlegm due to chest distention, hemopenia due to consumption of fluid, constipation induced by dryness of the intestine.',
+        'Fruits and seeds'
+    ],
+    'Chaenomelis_Fructus': [
+        'Primarily produced in the Chinese provinces of Anhui, Sichuan, Hubei, Zhejiang.',
+        'Superior medicinal material has wrinkled outer skin, thick flesh, firm texture, purplish-red throughout, sour taste.',
+        'Sour, warm.',
+        'Calms liver, soothes the sinews, harmonizes stomach, transforms dampness. Apply to damp arthralgia and contractions, heavy feeling and pain in the waist and knee joints, vomiting and diarrhea, muscle spasms, beriberi and edema.',
+        'Fruits and seeds'
+    ],
+    'Corni_Fructus': [
+        'Primarily produced in the Chinese provinces of Henan, Zhejiang, Shaanxi.',
+        'Superior medicinal material has thick flesh, purplish-red color, strongly sour taste.',
+        'Sour, astringent, slightly warm.',
+        'Supplements liver and kidney, astringes essence, secures desertion. Apply to vertigo and tinnitus, cold pain of waist and knees, impotence and seminal emission, anischuria and urinary frequency, metrorrhagia and metrostaxia, exhaustion due to excessive perspiration, feverish dysphoria and diabetes.',
+        'Fruits and seeds'
+    ],
+    'Crataegi_Fructus': [
+        'Primarily produced in the Chinese provinces of Henan, Hebei, Shandong.',
+        'Superior medicinal material is large with thick flesh, lacks seeds, and has red skin.',
+        'Sweet, sour, slightly warm.',
+        'Opens appetite, digests food, resolves stagnation, eliminates accumulation, invigorates blood, disperses stasis, resolves phlegm, moves qi. Apply to dyspeptic disease due to over consumption of meat, abdominal mass accumulation, abdominal swelling and fullness, abdominal pain due to stasis, phlegm and fluid retention, diarrhea, discharging fresh blood stool.',
+        'Fruits and seeds'
+    ],
+    'Foeniculi_Fructus': [
+        'Originally produced in Europe, in China, primarily produced in the provinces of Inner Mongolia, Gansu, Sichuan.',
+        'Superior medicinal material is large, full, yellowish-green, with potent aroma.',
+        'Acrid, warm.',
+        'Opens appetite, moves qi, disperses cold, benefits intestinal tract. Apply to cold in middle-jiao, loss of appetite, nausea and vomiting, abdominal cold pain, hernia pain, testicle swelling and pain, spleen and stomach qi stagnation, abdominal swelling fullness and pain.',
+        'Fruits and seeds'
+    ],
+    'Forsythiae_Fructus': [
+        'Primarily produced in the Chinese provinces of Henan, Shanxi, Shaanxi.',
+        'Superior medicinal material has yellow color, large halves, thick shells.',
+        'Bitter; slightly cold.',
+        'Clears heat, resolves toxin, eliminates swelling, disperses stasis, dispels wind heat, also called ‘premier of sore medicines’. Apply to warm heat diseases, erysipelas, rashes, abscess swelling pain, scrofula, pyretic stranguria and uroschesis, heart fire.',
+        'Fruits and seeds'
+    ],
+    
 }
