@@ -14,4 +14,4 @@ source /scratch/rp06/sl5952/Mica/.venv/bin/activate
 
 cd ../..
 
-python3 src/run.py --train_dir dataset/Dataset_1_Cleaned --test_dir dataset/Dataset_2_Cleaned --output_dir output/T004 --seed 42 --lr 4e-4 --model_name densenet161.tv_in1k --no_amp --no_tqdm >> T004.log 2>&1
+python3 src/run.py --train_dir dataset/Dataset_1_Cleaned --test_dir dataset/Dataset_2_Cleaned --output_dir output/T004 --seed 42 --lr 4e-4 --model_name densenet161.tv_in1k --no_amp --no_tqdm --epochs 200 >> T004.log 2>&1
