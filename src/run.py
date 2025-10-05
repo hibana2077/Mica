@@ -22,21 +22,25 @@ Requires: torch, torchvision, timm, tqdm
 
 import argparse
 import json
-import math
 import os
-import random
 from dataclasses import asdict, dataclass
-from typing import Dict, Tuple
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.utils.data import DataLoader
-from torchvision import datasets
-from timm import create_model
-from timm.data import resolve_data_config, create_transform
 from tqdm import tqdm
+
+from utils import (
+    set_seed,
+    get_device,
+    save_json,
+    build_dataloaders,
+    build_model,
+    evaluate,
+    apply_mixup,
+)
+from utils.data import accuracy
 
 # ------------------------------
 # In-script CONFIG (defaults)
@@ -69,6 +73,7 @@ class Config:
 
     seed: int = 42
     amp: bool = True  # Automatic Mixed Precision
+    use_tqdm: bool = True  # Enable/disable tqdm progress bars
 
 
 def parse_args():
@@ -129,147 +134,12 @@ def parse_args():
                         help="Enable automatic mixed precision")
     parser.add_argument("--no_amp", dest="amp", action="store_false",
                         help="Disable automatic mixed precision")
+    parser.add_argument("--tqdm", action="store_true", default=True,
+                        help="Enable tqdm progress bars")
+    parser.add_argument("--no_tqdm", dest="use_tqdm", action="store_false",
+                        help="Disable tqdm progress bars, only show epoch summary")
     
     return parser.parse_args()
-
-
-def set_seed(seed: int = 42):
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.benchmark = True
-
-
-def get_device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def build_dataloaders(cfg: Config, model: nn.Module) -> Tuple[DataLoader, DataLoader, list]:
-    # Resolve timm data config to get correct input size/mean/std/interp
-    data_cfg = resolve_data_config({}, model=model)
-
-    train_tfms = create_transform(**data_cfg, is_training=True)
-    test_tfms = create_transform(**data_cfg, is_training=False)
-
-    train_ds = datasets.ImageFolder(cfg.train_dir, transform=train_tfms)
-    test_ds = datasets.ImageFolder(cfg.test_dir, transform=test_tfms)
-
-    class_names = train_ds.classes
-    if len(class_names) != cfg.num_classes:
-        raise ValueError(
-            f"Detected {len(class_names)} classes in train_dir, but cfg.num_classes={cfg.num_classes}.\n"
-            f"Classes: {class_names}"
-        )
-
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=cfg.batch_size,
-        shuffle=True,
-        num_workers=cfg.workers,
-        pin_memory=True,
-        drop_last=True,
-    )
-
-    test_loader = DataLoader(
-        test_ds,
-        batch_size=max(1, cfg.batch_size * 2),
-        shuffle=False,
-        num_workers=cfg.workers,
-        pin_memory=True,
-        drop_last=False,
-    )
-
-    return train_loader, test_loader, class_names
-
-
-def build_model(cfg: Config) -> nn.Module:
-    model = create_model(
-        cfg.model_name,
-        pretrained=cfg.pretrained,
-        num_classes=cfg.num_classes,
-        drop_rate=cfg.dropout,
-    )
-    return model
-
-
-def accuracy(output: torch.Tensor, target: torch.Tensor, topk=(1,)):
-    with torch.no_grad():
-        maxk = max(topk)
-        batch_size = target.size(0)
-        _, pred = output.topk(maxk, 1, True, True)
-        pred = pred.t()
-        correct = pred.eq(target.view(1, -1).expand_as(pred))
-        res = []
-        for k in topk:
-            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
-            res.append((correct_k.mul_(100.0 / batch_size)).item())
-        return res
-
-
-def save_json(path: str, data: Dict):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-def train_one_epoch(model, loader, criterion, optimizer, device, scaler=None, grad_clip_norm=1.0):
-    model.train()
-    running_loss = 0.0
-    running_top1 = 0.0
-    pbar = tqdm(loader, desc="Train", leave=False)
-    for images, targets in pbar:
-        images = images.to(device, non_blocking=True)
-        targets = targets.to(device, non_blocking=True)
-
-        optimizer.zero_grad(set_to_none=True)
-        if scaler is not None:
-            with torch.cuda.amp.autocast():
-                outputs = model(images)
-                loss = criterion(outputs, targets)
-            scaler.scale(loss).backward()
-            if grad_clip_norm > 0:
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            outputs = model(images)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            if grad_clip_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
-            optimizer.step()
-
-        top1, = accuracy(outputs, targets, topk=(1,))
-        running_loss += loss.item() * images.size(0)
-        running_top1 += top1 * images.size(0)
-
-        pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc@1": f"{top1:.2f}"})
-
-    n = len(loader.dataset)
-    return running_loss / n, running_top1 / n
-
-
-def evaluate(model, loader, criterion, device):
-    model.eval()
-    running_loss = 0.0
-    running_top1 = 0.0
-    with torch.no_grad():
-        pbar = tqdm(loader, desc="Eval", leave=False)
-        for images, targets in pbar:
-            images = images.to(device, non_blocking=True)
-            targets = targets.to(device, non_blocking=True)
-            outputs = model(images)
-            loss = criterion(outputs, targets)
-            top1, = accuracy(outputs, targets, topk=(1,))
-            running_loss += loss.item() * images.size(0)
-            running_top1 += top1 * images.size(0)
-            pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc@1": f"{top1:.2f}"})
-
-    n = len(loader.dataset)
-    return running_loss / n, running_top1 / n
 
 
 def main():
@@ -297,6 +167,7 @@ def main():
         early_stop_patience=args.early_stop_patience,
         seed=args.seed,
         amp=args.amp,
+        use_tqdm=args.use_tqdm,
     )
 
     os.makedirs(cfg.output_dir, exist_ok=True)
@@ -326,43 +197,6 @@ def main():
     # Optionally set up Mixup/CutMix (manual lightweight version)
     do_mixup = cfg.mixup_alpha > 0.0 or cfg.cutmix_alpha > 0.0
 
-    def apply_mixup(images, targets):
-        if cfg.mixup_alpha > 0.0:
-            lam = torch.distributions.Beta(cfg.mixup_alpha, cfg.mixup_alpha).sample().item()
-            indices = torch.randperm(images.size(0)).to(images.device)
-            mixed_images = lam * images + (1 - lam) * images[indices]
-            # For CE with soft labels you'd need BCE or KL; here we approximate by choosing one label
-            mixed_targets = targets.clone()
-            mask = torch.rand_like(targets.float()) < (1 - lam)
-            mixed_targets[mask] = targets[indices][mask]
-            return mixed_images, mixed_targets
-        elif cfg.cutmix_alpha > 0.0:
-            lam = torch.distributions.Beta(cfg.cutmix_alpha, cfg.cutmix_alpha).sample().item()
-            indices = torch.randperm(images.size(0)).to(images.device)
-            bbx1, bby1, bbx2, bby2 = rand_bbox(images.size(), lam)
-            images[:, :, bby1:bby2, bbx1:bbx2] = images[indices, :, bby1:bby2, bbx1:bbx2]
-            mixed_targets = targets.clone()
-            # same simple label switch heuristic
-            mixed_targets = torch.where(torch.rand_like(targets.float()) < 0.5, targets, targets[indices])
-            return images, mixed_targets
-        else:
-            return images, targets
-
-    def rand_bbox(size, lam):
-        W = size[3]
-        H = size[2]
-        cut_rat = math.sqrt(1. - lam)
-        cut_w = int(W * cut_rat)
-        cut_h = int(H * cut_rat)
-        # uniform center
-        cx = random.randint(0, W)
-        cy = random.randint(0, H)
-        bbx1 = max(cx - cut_w // 2, 0)
-        bby1 = max(cy - cut_h // 2, 0)
-        bbx2 = min(cx + cut_w // 2, W)
-        bby2 = min(cy + cut_h // 2, H)
-        return bbx1, bby1, bbx2, bby2
-
     best_acc = -1.0
     epochs_no_improve = 0
     log_path = os.path.join(cfg.output_dir, "train_log.jsonl")
@@ -373,13 +207,18 @@ def main():
         model.train()
         running_loss = 0.0
         running_top1 = 0.0
-        pbar = tqdm(train_loader, desc=f"Train[{epoch}]", leave=False)
+        
+        if cfg.use_tqdm:
+            pbar = tqdm(train_loader, desc=f"Train[{epoch}]", leave=False)
+        else:
+            pbar = train_loader
+        
         for images, targets in pbar:
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
 
             if do_mixup:
-                images, targets = apply_mixup(images, targets)
+                images, targets = apply_mixup(images, targets, cfg.mixup_alpha, cfg.cutmix_alpha)
 
             optimizer.zero_grad(set_to_none=True)
             if scaler.is_enabled():
@@ -403,13 +242,15 @@ def main():
             top1, = accuracy(outputs, targets, topk=(1,))
             running_loss += loss.item() * images.size(0)
             running_top1 += top1 * images.size(0)
-            pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc@1": f"{top1:.2f}"})
+            
+            if cfg.use_tqdm:
+                pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc@1": f"{top1:.2f}"})
 
         train_loss = running_loss / len(train_loader.dataset)
         train_acc = running_top1 / len(train_loader.dataset)
 
         # Validation on test_dir
-        val_loss, val_acc = evaluate(model, test_loader, criterion, device)
+        val_loss, val_acc = evaluate(model, test_loader, criterion, device, cfg.use_tqdm)
         scheduler.step()
 
         print(f"Epoch {epoch}: train_loss={train_loss:.4f} train_acc={train_acc:.2f} | val_loss={val_loss:.4f} val_acc={val_acc:.2f}")
