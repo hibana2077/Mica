@@ -51,6 +51,7 @@ class Config:
     train_dir: str = "/kaggle/input/nb-tcm-chm/Dataset_1_Cleaned"
     test_dir: str = "/kaggle/input/nb-tcm-chm/Dataset_2_Cleaned"
     output_dir: str = "/kaggle/working"
+    val_split: float = 0.1  # portion of Dataset-1 reserved for validation (E0 design)
 
     model_name: str = "tf_efficientnet_b0_ns"  # e.g., resnet50, vit_base_patch16_224, tf_efficientnet_b0_ns
     pretrained: bool = True
@@ -91,6 +92,8 @@ def parse_args():
                         help="Path to test/validation dataset directory")
     parser.add_argument("--output_dir", type=str, default="/kaggle/working",
                         help="Directory to save outputs (model, logs, config)")
+    parser.add_argument("--val_split", type=float, default=0.1,
+                        help="Fraction of train_dir (Dataset-1) reserved for validation (E0). Set 0 to disable and use test_dir for validation.")
     
     # Model configuration
     parser.add_argument("--model_name", type=str, default="tf_efficientnet_b0_ns",
@@ -182,7 +185,7 @@ def main():
     model = build_model(cfg)
     model.to(device)
 
-    train_loader, test_loader, class_names = build_dataloaders(cfg, model)
+    train_loader, val_loader, test_loader, class_names = build_dataloaders(cfg, model)
     print(f"Classes ({len(class_names)}): {class_names}")
     
     # Compute model complexity (MACs, FLOPs, Params)
@@ -265,8 +268,8 @@ def main():
         train_loss = running_loss / len(train_loader.dataset)
         train_acc = running_top1 / len(train_loader.dataset)
 
-        # Validation on test_dir with detailed metrics
-        val_metrics = evaluate(model, test_loader, criterion, device, cfg.use_tqdm, compute_metrics=True)
+        # Validation on held-out subset of Dataset-1 if val_split>0 else on Dataset-2
+        val_metrics = evaluate(model, val_loader, criterion, device, cfg.use_tqdm, compute_metrics=True)
         val_loss = val_metrics["loss"]
         val_acc = val_metrics["acc"]
         val_precision = val_metrics.get("precision", 0.0)
@@ -330,6 +333,18 @@ def main():
             break
 
     print("Training complete.")
+
+    # Final evaluation on cross-source Dataset-2 (test set) if distinct
+    if cfg.val_split > 0:
+        print("\nEvaluating best model on cross-source test set (Dataset-2)...")
+        # reload best model if exists
+        ckpt_path = os.path.join(cfg.output_dir, "best_model.pth")
+        if os.path.exists(ckpt_path):
+            checkpoint = torch.load(ckpt_path, map_location=device)
+            model.load_state_dict(checkpoint["model_state"])
+        test_metrics = evaluate(model, test_loader, criterion, device, cfg.use_tqdm, compute_metrics=True)
+        save_json(os.path.join(cfg.output_dir, "final_test_metrics.json"), test_metrics)
+        print("Test Metrics (Dataset-2):", test_metrics)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ pandas
 Pillow
 scikit-learn
 scipy
+scipy
 tqdm
 
 # Image Processing
