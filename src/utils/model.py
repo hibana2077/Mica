@@ -15,10 +15,13 @@ def build_model(cfg) -> nn.Module:
     Returns:
         model: Created model
     """
+    # Some configs (e.g. SSL) may not define dropout or even num_classes (if doing pure feature learning)
+    drop_rate = getattr(cfg, "dropout", 0.0)
+    num_classes = getattr(cfg, "num_classes", 0)
     model = create_model(
         cfg.model_name,
-        pretrained=cfg.pretrained,
-        num_classes=cfg.num_classes,
-        drop_rate=cfg.dropout,
+        pretrained=getattr(cfg, "pretrained", True),
+        num_classes=num_classes,
+        drop_rate=drop_rate,
     )
     return model

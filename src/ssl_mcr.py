@@ -41,6 +41,8 @@ class SSLConfig:
     model_name: str = "resnet18"  # smaller backbone default
     pretrained: bool = False
     num_classes: int = 20
+    # Optional dropout rate for backbone classifier construction (passed to timm create_model as drop_rate)
+    dropout: float = 0.0
     epochs: int = 50
     batch_size: int = 64
     workers: int = 4
@@ -373,6 +375,7 @@ def build_argparser():
     p.add_argument("--output_dir", type=str, default="./outputs_ssl")
     p.add_argument("--model_name", type=str, default="resnet18")
     p.add_argument("--pretrained", action="store_true", default=False)
+    p.add_argument("--dropout", type=float, default=0.0, help="Dropout rate (drop_rate) passed to timm.create_model")
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--workers", type=int, default=4)
@@ -403,6 +406,7 @@ def main():
         output_dir=args.output_dir,
         model_name=args.model_name,
         pretrained=args.pretrained,
+        dropout=args.dropout,
         epochs=args.epochs,
         batch_size=args.batch_size,
         workers=args.workers,
