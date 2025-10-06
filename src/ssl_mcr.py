@@ -61,6 +61,7 @@ class SSLConfig:
     # Generic
     seed: int = 42
     amp: bool = True
+    use_tqdm: bool = True
     eval_geometry: bool = True
     geometry_k: int = 10
     geometry_max_nodes: int = 2000
@@ -260,9 +261,9 @@ def train_ssl_mcr(cfg: SSLConfig):
 
     for epoch in range(1, cfg.epochs + 1):
         backbone.train(); projector.train()
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{cfg.epochs}")
+        loader_iter = tqdm(train_loader, desc=f"Epoch {epoch}/{cfg.epochs}") if cfg.use_tqdm else train_loader
         epoch_loss = 0.0
-        for v1, v2, y in pbar:
+        for v1, v2, y in loader_iter:
             v1, v2 = v1.to(device), v2.to(device)
             y = y.to(device)
             optimizer.zero_grad(set_to_none=True)
@@ -302,7 +303,8 @@ def train_ssl_mcr(cfg: SSLConfig):
             scaler.step(optimizer)
             scaler.update()
             epoch_loss += loss.item() * v1.size(0)
-            pbar.set_postfix({"ssl": f"{loss_ssl.item():.3f}", "intra": f"{loss_intra.item():.3f}", "cross": f"{loss_cross.item():.3f}"})
+            if cfg.use_tqdm:
+                loader_iter.set_postfix({"ssl": f"{loss_ssl.item():.3f}", "intra": f"{loss_intra.item():.3f}", "cross": f"{loss_cross.item():.3f}"})
         print(f"Epoch {epoch} mean loss: {epoch_loss / len(train_loader.dataset):.4f}")
 
     # Save backbone + projector
@@ -328,7 +330,8 @@ def train_ssl_mcr(cfg: SSLConfig):
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225])]))
             web_loader = DataLoader(base_web, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.workers)
-            for x, y in tqdm(web_loader, desc="Feat-Web"):
+            web_iter = tqdm(web_loader, desc="Feat-Web") if cfg.use_tqdm else web_loader
+            for x, y in web_iter:
                 x = x.to(device)
                 f = backbone(x)
                 if f.ndim == 4:
@@ -341,7 +344,8 @@ def train_ssl_mcr(cfg: SSLConfig):
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225])]))
             phone_loader = DataLoader(base_phone, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.workers)
-            for x, y in tqdm(phone_loader, desc="Feat-Phone"):
+            phone_iter = tqdm(phone_loader, desc="Feat-Phone") if cfg.use_tqdm else phone_loader
+            for x, y in phone_iter:
                 x = x.to(device)
                 f = backbone(x)
                 if f.ndim == 4:
@@ -392,6 +396,7 @@ def build_argparser():
     p.add_argument("--mcr_lap_sigma", type=float, default=0.0, help="Bandwidth for Laplacian mode; <=0 for auto")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--no_amp", dest="amp", action="store_false")
+    p.add_argument("--no_tqdm", dest="use_tqdm", action="store_false", default=True)
     p.add_argument("--eval_geometry", action="store_true", default=False)
     p.add_argument("--geometry_k", type=int, default=10)
     p.add_argument("--geometry_max_nodes", type=int, default=2000)
@@ -416,13 +421,14 @@ def main():
         temperature=args.temperature,
         mode=args.mode,
         mcr_intra_k=args.mcr_intra_k,
-    mcr_lambda_intra=args.mcr_lambda_intra,
+        mcr_lambda_intra=args.mcr_lambda_intra,
         mcr_lambda_cross=args.mcr_lambda_cross,
         mcr_cross_k=args.mcr_cross_k,
-    mcr_intra_mode=args.mcr_intra_mode,
-    mcr_lap_sigma=args.mcr_lap_sigma,
+        mcr_intra_mode=args.mcr_intra_mode,
+        mcr_lap_sigma=args.mcr_lap_sigma,
         seed=args.seed,
         amp=args.amp,
+        use_tqdm=args.use_tqdm,
         eval_geometry=args.eval_geometry,
         geometry_k=args.geometry_k,
         geometry_max_nodes=args.geometry_max_nodes,

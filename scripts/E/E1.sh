@@ -16,7 +16,7 @@ cd ../..
 # Run SSL (SimCLR only)
 python3 src/ssl_mcr.py --train_dir dataset/Dataset_1_Cleaned \
   --test_dir dataset/Dataset_2_Cleaned --output_dir output/E1_ssl --model_name resnet18 \
-  --epochs 100 --batch_size 128 --mode ssl --eval_geometry --geometry_k 10 --geometry_max_nodes 1500 --no_amp >> E1_ssl.log 2>&1
+  --epochs 100 --batch_size 128 --mode ssl --eval_geometry --geometry_k 10 --geometry_max_nodes 1500 --no_amp --no_tqdm >> E1_ssl.log 2>&1
 # Run MCR
 python3 src/ssl_mcr.py --train_dir dataset/Dataset_1_Cleaned \
   --test_dir dataset/Dataset_2_Cleaned --output_dir output/E1_mcr --model_name resnet18 \
