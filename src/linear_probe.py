@@ -200,10 +200,15 @@ def train_linear(cfg: LPConfig):
 def parse_args():
     p = argparse.ArgumentParser(description="Linear Probe on SSL Encoder")
     from dataclasses import MISSING
+    # Resolve (possibly postponed) type annotations so that bools are detected correctly
+    from typing import get_type_hints
+    type_hints = get_type_hints(LPConfig)
     for field in LPConfig.__dataclass_fields__.values():
         name = f"--{field.name}"
-        # Handle booleans with --flag / --no_flag semantics
-        if field.type is bool:
+        # Determine the (resolved) python type of the field (handles __future__ annotations)
+        resolved_type = type_hints.get(field.name, field.type)
+        # Handle booleans with --flag / --no_field semantics
+        if resolved_type is bool:
             default_val = getattr(LPConfig, field.name)
             if default_val:  # default True -> create a --no_flag to disable
                 p.add_argument(f"--no_{field.name}", action="store_false", dest=field.name,
