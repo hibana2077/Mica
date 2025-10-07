@@ -19,4 +19,4 @@ python3 src/linear_probe.py \
   --train_domain dataset/Dataset_1_Cleaned \
   --test_domain dataset/Dataset_2_Cleaned \
   --output_dir output/LP_resnet50_D1toD2_f01 \
-  --label_fraction 0.01 --epochs 100 --batch_size 128 --lr 0.001 --no_amp >> S002.log 2>&1
+  --label_fraction 0.01 --epochs 100 --batch_size 128 --lr 0.001 --model_name resnet50 --no_amp >> S002.log 2>&1
