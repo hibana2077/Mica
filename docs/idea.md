@@ -1,133 +1,134 @@
-# 題目（含一句話摘要）
+好的，Tom！以下是一個「簡單但有深度」、且不需要和 SOTA 互相比較的題目與完整研究藍圖，限定只用 **NB-TCM-CHM** 資料集。
 
-**藥材影像的特徵流形一致性：在 NB-TCM-CHM 上以幾何正則化學習跨來源穩健表徵**
-一句話：只用 NB-TCM-CHM（含網路蒐集與手機實拍兩個來源）來驗證一個「**流形一致性正則化**」(Manifold Consistency Regularization, MCR) 的想法：讓同一藥材在不同來源上的特徵位於**相同的內在流形**，並以幾何指標（而非 SOTA 排行）衡量學習是否成功。NB-TCM-CHM 提供 20 類藥材果實影像，Dataset-1 含 3,384 張網路圖、Dataset-2 含 400 張手機實拍圖，且均由中醫藥專家標註，非常適合做跨來源幾何分析。([PubMed][1])
+# 題目（可直接用）
+
+**在 NB-TCM-CHM 上之無監督域不變表徵學習：以變異-不變-協方差正則化為核心並具理論誤差上界的線性探測研究**
+
+> 動機重點：NB-TCM-CHM 由兩種來源構成（網路爬取的 Dataset-1 與手機實拍的 Dataset-2），天然存在「網路 ↔ 藥房」域落差；我們用**單一資料集**的內部域差（out-of-the-box domain shift）做**自監督學習＋理論分析**，只用**線性探測（linear probe）**驗證表示品質，不與他法拼 SOTA。資料集說明與兩分版來源見原始資料與論文。 ([data.mendeley.com][1])
 
 ---
 
 ## 研究核心問題
 
-在 **僅使用 NB-TCM-CHM** 的前提下，如何學得一個影像表徵，使得：
-
-1. **同一藥材**於不同影像來源（web vs. phone）落在**相同/對齊的低維流形**上；
-2. **不同藥材**的流形在幾何上**可分**（如以測地距離分離）？
-   我們關心的是表徵的**內在幾何品質**，非排行榜式準確率比較。關鍵動機是：流形學習能揭示資料的低維幾何結構並輔助可視化與去雜訊，這比單純壓低錯誤率更能提供可解釋的洞見。([年刊評論][2])
+在僅使用 NB-TCM-CHM 的前提下，能否藉由自監督方法學到**對域轉移（網路→藥房）具穩健性的通用表徵**，使得**固定凍結表徵、僅訓練線性分類器**亦可在跨域測試下維持穩定性能？（目標是可解釋、可證、可重現，而非追求 SOTA。）
 
 ## 研究目標
 
-1. 提出 **MCR 損失**：鼓勵**來源內一致性**與**跨來源對齊**的測地幾何保持。
-2. 建立一套**幾何評估指標**（流形維度估計、信賴度/連續性、測地扭曲、流形曲率與可分性指標），作為是否「學到內在流形」的**主要成效指標**。
-3. 證明在合理幾何條件下，MCR 可以**保留類別間的測地間隔（margin）**，使得簡單分類器（如 1-NN/k-NN）在跨來源下仍具穩健性。
-4. 提供**可重現**的 NB-TCM-CHM 幾何實驗流程，後續可給其他 TCM 視覺任務沿用。
+1. 提出一個**簡潔**的 SSL 架構（以 **VICReg** 為主體），再加入**輕量域對齊正則**，在 NB-TCM-CHM 上學到域不變表徵。 ([arXiv][2])
+2. 推導**跨域線性探測的目標風險上界**：以上界刻畫「源域表示品質 + 域差距 + 類別對齊」三者對目標域錯誤率的影響，理論基礎取自 **Ben-David 的 HΔH divergence** 與後續域適應理論。 ([Alex Kulesza][3])
+3. 在**不與 SOTA 比**的前提下，以**同資料集內跨域評估**（訓練：Dataset-1，測試：Dataset-2；反向亦同）與**標註效率曲線**（線性探測只用少量標註）來實證方法有效性。 ([data.mendeley.com][1])
 
 ## 預期貢獻
 
-* **方法面**：提出一個**幾何正則化**框架（MCR），專注學習**來源不變的特徵流形**。
-* **評估面**：用**幾何品質指標**取代 SOTA 排行，建立可重複、可診斷的流形評測協議。
-* **理論面**：給出「**低扭曲-高間隔** ⇒ **穩健可分**」的邏輯鏈。
-* **資料面**：示範 NB-TCM-CHM 的**跨來源**價值（Dataset-1: 網路 3,384 張；Dataset-2: 手機 400 張；合計 20 類果實藥材）與幾何分析可行性。([PubMed][1])
+* **方法論**：VICReg + 簡潔「域對齊量化」正則（見方法論段）。
+* **理論**：給出跨域線性探測的**可證上界**，連結表徵的不變性指標與 HΔH 域差。 ([Alex Kulesza][3])
+* **資料集使用範式**：展示 NB-TCM-CHM 內生兩域可作為**低成本域泛化試床**，提供一套**不比 SOTA、僅線性探測**的評估協定。 ([科學直接][4])
 
 ## 創新
 
-* 從「**內在幾何**」角度切入 CHM 影像辨識：不是追求 SOTA，而是回答**特徵空間是否學到正確的流形結構**。
-* **只用單一資料集**完成**跨來源**（web→phone）對齊與穩健性檢驗，避免額外外部數據。([PubMed][1])
-* 將**流形學習與度量學習**（測地距離保持、Laplace-Beltrami 近似）系統化引入中藥材影像。([年刊評論][2])
+* 在 **NB-TCM-CHM** 上**首度**（據我們檢索）將 **VICReg** 的三項損失（變異/不變/協方差）與**跨域分佈距離正則**（以 Mini-batch 層級的分佈距離近似）**合併**，專注於**域穩健的表徵幾何**，而非 backbone 小改或蒐集外部資料。 ([arXiv][2])
+* 評估方式以**線性探測 + k-NN**為主，**不進行**與現有方法之 SOTA 對比；改以**標註效率**、**跨域落差**與**理論指標對實驗的吻合度**作為觀察重點。
+* 將 **Ben-David 域適應上界**落實到「**自監督表徵 + 線性探測**」設定，提出可操作的**域差估計指標**與**不變性 proxy**來對應上界各項。 ([Alex Kulesza][3])
 
-## 理論洞見（直觀）
+## 理論洞見（概要）
 
-* 若每個類別 (c) 的影像分布近似位於一個低維流形 (\mathcal{M}_c)，且跨來源只是**在同一流形上的不同取樣**（光照、視角、噪聲造成的「位移」），那麼理想的表徵 (f) 應是近似**等距/雙李普希茲**嵌入，使 (\mathcal{M}_c) 在特徵空間保持幾何不變（如測地距離與局部鄰域結構）。這與流形學習文獻「學得可解釋的低維結構」的精神一致。([年刊評論][2])
+* 設兩域 ( \mathcal{D}*s )（Dataset-1：網路圖像）與 ( \mathcal{D}*t )（Dataset-2：藥房實拍），表徵 ( z=f*\theta(x) )。對固定線性分類器 ( h_w(z)=\arg\max Wz )，目標域錯誤 ( \epsilon_t(h\circ f) ) 可由
+  [
+  \epsilon_t(h\circ f) \le \epsilon_s(h\circ f) ;+; \tfrac{1}{2} d*{H\Delta H}(f_#\mathcal{D}*s,, f*#\mathcal{D}*t);+;\lambda
+  ]
+  其中 ( d*{H\Delta H} ) 為表示空間中的域差，( \lambda ) 為可分性常數。若透過 SSL 使同類在兩域的簇中心靠攏且方差受控（VICReg 的不變＋變異項），則可同時壓低 ( \epsilon_s ) 與域差項。 ([Alex Kulesza][3])
+* 將 **InfoNCE / VICReg** 視為對**互資訊下界**或**冗餘抑制**的近似，能在不額外標註下提升語義穩定度，為少標註線性探測奠基。 ([arXiv][5])
 
----
+## 方法論（可直接實作）
 
-## 方法論（可直接落地）
+1. **資料與切分**（僅 NB-TCM-CHM）：
 
-**資料**：NB-TCM-CHM 全部 20 類；訓練主要用 Dataset-1（3,384），測試與對齊檢驗用 Dataset-2（400）。([PubMed][1])
+   * 使用官方兩分資料：**Dataset-1（3384 張，網路）**、**Dataset-2（400 張，藥房）**；保持原標籤（20 個果實類別）。 ([data.mendeley.com][1])
+2. **自監督預訓練（backbone 可選 ResNet-50 或 MobileNet-V3）**
 
-Backbone: ResNet-18 / denseNet-121 / deit_tiny_patch16_224 / convnextv2_atto / vit_tiny_patch16_224
+   * **VICReg 損失**：
+     [
+     \mathcal{L}*{\text{VICReg}}=\underbrace{|z_1-z_2|^2}*{\text{invariance}}+\underbrace{\sum_j \max(0,\gamma-\mathrm{Std}(z_{\cdot j}))}_{\text{variance}}+\underbrace{|\mathrm{Cov}(z)-I|*F^2}*{\text{covariance}}
+     ]
+     （兩視角增強：隨機裁切、顏色抖動、微量仿射；避免過強形變以免破壞藥材關鍵紋理。） ([arXiv][2])
+   * **輕量域對齊正則**：在每個 batch 內，同類 pseudo-labels（由最近鄰或小型原型估計）下，最小化兩域原型距離與最大均值差（MMD）或能有效近似的**HΔH 代理量**（例如用兩個隨機初始化的小線性鑑別器估計的對分佈可分性）。理論上對應於上界中的域差項。 ([Alex Kulesza][3])
+3. **線性探測與 k-NN 評估**
 
-**(A) 表徵學習骨架（自監督）**
+   * 凍結 ( f_\theta )，僅在源域少量標註上訓練線性層（1%、5%、10%、100% 四檔），並在**同域 / 跨域**上驗證。
+4. **不需要與 SOTA 比**：僅報告自身方法在不同標註比例、不同對齊權重、不同 backbone 的**內在指標**與**泛化曲線**。
 
-* Backbone：小型 CNN 或 ViT-tiny（避免過參數），僅在 NB-TCM-CHM 上做 SimCLR/DINO 式對比學習；增強只用旋轉、裁切、亮度/對比/色溫，避免語義破壞。
-* 取出倒數幾層做投影頭，得到特徵 (z=f_\theta(x))。
+## 數學理論推導與證明（提綱）
 
-**(B) 流形一致性正則（MCR）**
-
-1. **來源內測地保持**：對 Dataset-1（或 Dataset-2）建 (k)-NN 圖估計測地距離 (\hat d_{\text{geo}}(x_i,x_j))；在特徵空間以圖-最短路徑近似 (d_{\text{geo}}(z_i,z_j))。
+1. **域適應上界化**：從 Ben-David 框架出發，將影像經 ( f ) 映到表示空間，證明只要**兩域在表示空間的 HΔH 可分性**降低，則目標域風險上界同降。 ([Alex Kulesza][3])
+2. **VICReg 與類內散度**：證明在類條件獨立近似下，VICReg 的 variance + invariance 項可作為**控制類內方差與視角不變性**的上界代理，進而間接影響線性可分性。 ([NeurIPS Proceedings][6])
+3. **對齊正則與域差代理**：將所設計的 MMD / 雙鑑別器分佈距離與 HΔH 之間建立**上、下界或關聯不等式**（以 Rademacher 複雜度或 integral probability metric 為工具），給出**合成上界**：
    [
-   \mathcal{L}*{\text{intra}}=\sum*{(i,j)\in\mathcal{N}} \Big(d_{\text{geo}}(z_i,z_j)-\hat d_{\text{geo}}(x_i,x_j)\Big)^2
+   \epsilon_t \lesssim \epsilon_s + c_1\cdot \widehat{\text{IPM}}(f_#\mathcal{D}*s,f*#\mathcal{D}_t) + c_2\cdot \text{IntraClassVar}
    ]
-2. **跨來源等距對齊**：對同類藥材在兩來源的鄰對 ((x^A,x^B)) 施加
-   [
-   \mathcal{L}*{\text{cross}}=\sum \big|,\mathrm{Exp}*{z^A}(\Delta^A)-\mathrm{Exp}_{z^B}(\Delta^B)\big|^2
-   ]
-   其中 (\mathrm{Exp}) 代表在特徵流形上之指數映射（實作用圖-測地近似），(\Delta^\cdot) 由局部鄰域圖構成的「切向位移」。直覺：**同一類**在兩來源的**局部幾何應可對齊**。
-3. **分類頭（可選，僅作診斷）**：凍結 (f_\theta) 後，以簡單 **k-NN / 線性分類器**評估類別可分性，不以此與 SOTA 比拼。
-4. **總損失**：(\mathcal{L}=\mathcal{L}*{\text{SSL}}+\lambda_1\mathcal{L}*{\text{intra}}+\lambda_2\mathcal{L}_{\text{cross}})。
-
-**(C) 幾何評估指標（主報告指標）**
-
-* **Trustworthiness / Continuity（T&C）**、**Geodesic Distortion（測地扭曲）**、**Local Intrinsic Dim.（內在維度）**、**離群曲率比例**、**類間測地間隔**。這些反映是否真學到低維幾何結構，而非僅僅擬合分類器。流形學習的統計基礎與常見作法可見近期綜述。([年刊評論][2])
-
----
-
-## 數學理論推演與（證明綱要）
-
-設每個類別 (c) 的真實資料位於緊緻、連通的黎曼流形 ((\mathcal{M}*c,g_c))，且**類間最小測地間隔**為 (\Delta=\min*{c\neq c'}\min_{x\in\mathcal{M}*c,y\in\mathcal{M}*{c'}} d_{g}(x,y))。令學得之嵌入 (f:\cup_c\mathcal{M}_c\to\mathbb{R}^d) 為雙李普希茲，扭曲常數 (\epsilon) 滿足
-[
-(1-\epsilon),d_g(x,y)\le |f(x)-f(y)|\le (1+\epsilon),d_g(x,y)
-]
-且各 (\mathcal{M}*c) 的有界**主曲率** (\kappa) 與**注入半徑** (r*{\text{inj}}) 滿足標準估計假設（確保以 (k)-NN 圖近似測地距離的誤差受控）。則：
-
-**命題 1（間隔保存）**：若 (\epsilon<\frac{1}{3}) 且估計誤差 (\delta) 足夠小，則嵌入後的**類間歐式間隔**至少為 ((1-2\epsilon)\Delta - O(\delta))。
-**命題 2（k-NN 可分）**：在樣本密度充分且 (\epsilon,\delta) 受控時，**1-NN/k-NN** 在特徵空間的跨來源錯誤率上界由 (\exp(-c,\Delta^2)) 型的項支配（(c) 與曲率/維度/覆蓋數有關）。
-**命題 3（跨來源等距對齊 ⇒ 等幾何）**：若 (\mathcal{L}_{\text{cross}}\to 0)，則對同一類別兩來源取樣之嵌入，存在局部同胚 (\phi) 使鄰域內測地保距（至一階），故兩者**局部等幾何**。
-
-*證明思路*：使用流形正則化與圖拉普拉斯逼近 ( \Delta_{\mathcal{M}} ) 的既有一致性結果，以及雙李普希茲嵌入維持間隔與鄰域排序的性質；圖最短路徑近似測地距離的誤差由取樣密度、鄰數 (k) 與曲率控制。相關理論背景可見流形正則化與拉普拉斯嵌入收斂等經典與近期綜述。([年刊評論][2])
-
----
+   並說明各項可由訓練目標直接最小化。 ([papers.neurips.cc][7])
+4. **InfoNCE／互資訊視角（可附錄）**：補充以 CPC/InfoNCE 下界描述「不同視角同一樣本」之資訊保存性，解釋為何少量標註線性探測有效。 ([arXiv][5])
 
 ## 預計使用資料集（only NB-TCM-CHM）
 
-* **Dataset-1**：20 類、3,384 張，來源為網路蒐集；
-* **Dataset-2**：20 類、400 張，來源為傳統中醫藥房手機拍攝；
-* 皆由**中醫藥專家標註**，每類各自成資料夾。**本研究不使用其他外部資料**。([PubMed][1])
-
----
+* **NB-TCM-CHM**：20 種中藥材果實影像；**Dataset-1：3384 張（網路）**，**Dataset-2：400 張（藥房手機）**；官方提供以供藥材辨識研究。你的工作將**只使用這個資料集**。 ([data.mendeley.com][1])
 
 ## 與現有研究之區別
 
-* 既有 CHM 影像工作多以**分類準確率**與**模型改進**為重心（且常用自建數據），NB-TCM-CHM 的建立則補足公共數據來源；我們的重點改為**幾何結構的學與評**。([PubMed][1])
-* 流形學習文獻強調低維結構有助可視化與可解釋，我們將此**落地到 CHM** 的跨來源一致性，並以**幾何指標**而非 SOTA 排位為主報告。([年刊評論][2])
+* 多數現有工作著重**架構變體**與**與他法比較**，或在 NB-TCM-CHM 上追求最高指標；例如 2025 年有方法在 NB-TCM-CHM 上報告高準確率，但偏向架構工程優化。本文改以**表徵學習＋理論上界**為主、**不與 SOTA 比**，並聚焦**跨域穩健性與標註效率**這兩個被忽略的面向。 ([PubMed][8])
+
+## 實驗設計（不比 SOTA、強調可解釋）
+
+1. **設定**
+
+   * **SSL 預訓練**：Dataset-1∪Dataset-2 全無標註；epoch 200；batch 256；VICReg 三項損失＋域對齊正則（權重 α）。 ([arXiv][2])
+   * **線性探測**：固定 ( f_\theta )，在 Dataset-1（或 Dataset-2）各使用 1%/5%/10%/100% 標註訓練線性層，測試於**同域與跨域**。
+   * **k-NN**：以 cosine k-NN（k=20）作無參數評估。
+2. **指標**
+
+   * Top-1 Accuracy、Macro-F1；**跨域落差 Δ**（源測 − 目標測）；**標註效率曲線 AUC**；**不變性與冗餘指標**（VICReg 的 variance 下限達成率、特徵協方差對角佔優度）。
+3. **消融**
+
+   * 移除域對齊正則；改用單純 VICReg；對比 CPC/InfoNCE 版（僅作**內部對照**，非對外 SOTA）。 ([arXiv][5])
+4. **小樣本學習**
+
+   * 僅取每類 1/5/10 張監督樣本做線性探測，觀察 SSL 的**標註節省效益**。
+5. **可視化與分析**
+
+   * t-SNE / UMAP 在類別與域上雙著色；觀察類簇是否跨域重疊。
+   * 報告**域差代理量**（MMD 或雙鑑別器錯誤）與**跨域表現**的皮爾森/斯皮爾曼相關，驗證理論指標可預測性能。
+6. **重現性**
+
+   * 公開 config、隨機種子與 split；不使用外部資料或擴充標註。
 
 ---
 
-## Experiment 設計（只做內部對照，不與 SOTA 比）
+## 可能的章節結構（論文骨幹）
 
-**E0. 基線與分割**
+1. 引言：問題定義＋NB-TCM-CHM 介紹與兩域特性。 ([科學直接][4])
+2. 相關工作：中藥材辨識資料集與方法概覽；自監督學習（VICReg、CPC）與域適應理論。 ([Frontiers][9])
+3. 方法：VICReg＋域對齊正則；指標定義。 ([arXiv][2])
+4. 理論：從 HΔH 上界推導到本方法的合成上界；與 InfoNCE 關聯。 ([Alex Kulesza][3])
+5. 實驗：線性探測、k-NN、標註效率、消融、可視化。
+6. 討論：限制（小規模 Dataset-2）、未來工作（多部位藥材、形態外觀變化、更細粒度屬性）。
+7. 結論。
 
-* Train：Dataset-1；Val/Test-A：Dataset-1；Test-B：Dataset-2（跨來源）。
+---
 
-**E1. 幾何診斷（無分類器）**
+### 參考線索（你撰文時可引用）
 
-* 比較：w/o MCR（只有自監督） vs. w/ MCR。
-* 指標：T&C、Geodesic Distortion、Local ID（如 MLE/Two-NN）、局部曲率估計、類間測地間隔；並以 2D/3D 嵌入（Diffusion Maps/Laplacian Eigenmaps）作可視化與鄰域保存量化。([年刊評論][2])
+* **NB-TCM-CHM 資料來源與內容**（Data Brief＋Mendeley Data＋PubMed 摘要） ([科學直接][4])
+* **近期在 NB-TCM-CHM 上的辨識工作**（作為背景，非比較對象） ([PubMed][8])
+* **自監督學習基礎**：CPC/InfoNCE、VICReg 與其資訊理論解讀 ([arXiv][5])
+* **域適應理論**：Ben-David HΔH 上界與後續綜述 ([Alex Kulesza][3])
 
-**E2. 跨來源對齊**
+如果你要，我可以把上述方法轉成**可直接跑的訓練腳本骨架（PyTorch）**與**論文 LaTeX 範本**，包含理論章節的定理與證明提綱。
 
-* 在 Test-B 檢查同類在兩來源的**鄰域重疊率**、**局部等距誤差**、**子流形主角距**。
-* 以**來源辨識器**（判別 web 或 phone）作「反指標」：越難分辨來源，表示越好的一致性（但不作主指標）。
-
-**E3. 小樣本可分性**
-
-* 凍結表徵，以 **k-NN / 線性分類器**在 Test-B 作**少量標註**（每類 1–5 張）學習，觀察性能隨標註量的**資料效率曲線**。
-* 目的不是拿最高分，而是對照 w/o MCR 的**資料效率改善**。
-
-**E4. 消融**
-
-* (\lambda_1,\lambda_2) 權重掃描；鄰數 (k) 與圖構造（(\epsilon)-graph vs. k-NN）；不同自監督頭（SimCLR vs. DINO）。
-* 檢查指標敏感度與穩定性，並通過**統計顯著性**（如 bootstrap 信賴區間）回報。
-
-**報告格式**
-
-* 主要圖表：幾何指標對照條圖／折線、跨來源嵌入可視化、資料效率曲線；
-* 附錄：理論假設、界與證明細節、實作參數與重現指引。
+[1]: https://data.mendeley.com/datasets/2kjmzjyrmd "Ningbo Traditional Chinese Medicine Chinese Herb ..."
+[2]: https://arxiv.org/abs/2105.04906 "VICReg: Variance-Invariance-Covariance Regularization for Self-Supervised Learning"
+[3]: https://www.alexkulesza.com/pubs/adapt_mlj10.pdf "A theory of learning from different domains - Alex Kulesza"
+[4]: https://www.sciencedirect.com/science/article/pii/S2352340924003743 "NB-TCM-CHM: Image dataset of the Chinese herbal ..."
+[5]: https://arxiv.org/pdf/1807.03748 "Representation learning with contrastive predictive coding"
+[6]: https://proceedings.neurips.cc/paper_files/paper/2023/file/6b1d4c03391b0aa6ddde0b807a78c950-Paper-Conference.pdf "An Information-Theoretic Perspective on Variance- ..."
+[7]: https://papers.neurips.cc/paper/4684-generalization-bounds-for-domain-adaptation.pdf "Generalization Bounds for Domain Adaptation"
+[8]: https://pubmed.ncbi.nlm.nih.gov/39799240/ "Chinese herbal medicine recognition network based on ..."
+[9]: https://www.frontiersin.org/journals/bioengineering-and-biotechnology/articles/10.3389/fbioe.2023.1199803/full "Image recognition of traditional Chinese medicine based ..."
