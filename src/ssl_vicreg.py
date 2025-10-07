@@ -82,7 +82,6 @@ class SSLConfig:
 
     # Optimization / misc
     seed: int = 42
-    amp: bool = True
     log_every: int = 50
     save_every: int = 25
     resume: str | None = None
@@ -91,6 +90,8 @@ class SSLConfig:
     jitter: float = 0.4
     blur_prob: float = 0.1
     gray_prob: float = 0.1
+
+    no_amp: bool = False
 
 
 # -------------------------------------------------
@@ -233,7 +234,7 @@ def train(cfg: SSLConfig):
     params = list(encoder.parameters()) + list(projector.parameters())
     optimizer = torch.optim.AdamW(params, lr=cfg.lr, weight_decay=cfg.weight_decay)
 
-    scaler = torch.cuda.amp.GradScaler(enabled=cfg.amp and device.type == "cuda")
+    scaler = torch.cuda.amp.GradScaler(enabled=not cfg.no_amp and device.type == "cuda")
 
     global_step = 0
     best_loss = float("inf")
@@ -373,11 +374,17 @@ def parse_args():
     for field in SSLConfig.__dataclass_fields__.values():
         name = f"--{field.name}"
         if field.type is bool:
-            # Provide --no_* flag for bools
-            if getattr(SSLConfig, field.name, False):
-                p.add_argument(f"--no_{field.name}", action="store_false", dest=field.name)
+            # Handle boolean flags
+            default_val = field.default
+            if field.name.startswith('no_'):
+                # For no_* flags, add the flag itself to set True (disable feature)
+                p.add_argument(name, action="store_true", default=default_val)
+            elif default_val:
+                # If default is True, provide --no_* flag to set False
+                p.add_argument(f"--no_{field.name}", action="store_false", dest=field.name, default=default_val)
             else:
-                p.add_argument(name, action="store_true")
+                # If default is False, provide flag to set True
+                p.add_argument(name, action="store_true", default=default_val)
         else:
             p.add_argument(name, type=type(field.default), default=field.default)
     return p.parse_args()
