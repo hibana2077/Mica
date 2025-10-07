@@ -190,8 +190,29 @@ def train_linear(cfg: LPConfig):
     train_loader, test_loader, classes = prepare_loaders(cfg, encoder, cfg.seed)
     classifier = nn.Linear(feat_dim, len(classes)).to(device)
     opt = torch.optim.AdamW(classifier.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    # Use new torch.amp API (deprecation warning otherwise)
-    scaler = torch.amp.GradScaler(device_type="cuda", enabled=cfg.amp and device.type == "cuda")
+    # GradScaler creation with backward compatibility across PyTorch versions.
+    # Newer (>=2.0) PyTorch supports torch.amp.GradScaler(device_type=...). Older versions
+    # use torch.cuda.amp.GradScaler() without the device_type kwarg. We try the new API first
+    # and gracefully fall back; if AMP is disabled or unavailable we supply a no-op shim.
+    class _NoScaler:
+        def is_enabled(self): return False
+        def scale(self, loss): return loss
+        def step(self, opt): pass
+        def update(self): pass
+
+    if cfg.amp and device.type == "cuda":
+        scaler = None
+        try:
+            # Preferred new API
+            scaler = torch.amp.GradScaler(device_type="cuda")  # type: ignore[arg-type]
+        except Exception:
+            try:
+                # Legacy API
+                scaler = torch.cuda.amp.GradScaler()
+            except Exception:
+                scaler = _NoScaler()
+    else:
+        scaler = _NoScaler()
     ce = nn.CrossEntropyLoss()
     best_acc = -1
     log_path = os.path.join(cfg.output_dir, "lp_log.jsonl")
