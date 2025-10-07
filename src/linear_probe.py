@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse, json, os, random
 from dataclasses import dataclass, asdict
 from typing import List
+import contextlib
 
 import torch
 import torch.nn as nn
@@ -28,6 +29,30 @@ from tqdm import tqdm
 
 from utils import set_seed, get_device, save_json
 from utils.data import accuracy
+
+
+@contextlib.contextmanager
+def autocast_ctx(enabled: bool, device_type: str):
+    """Backward + forward compatible autocast context.
+
+    Tries torch.amp.autocast (new API). Falls back to torch.cuda.amp.autocast for
+    older PyTorch versions. If disabled or unsupported, it is a no-op.
+    """
+    if not enabled:
+        yield
+        return
+    try:
+        # New API (PyTorch >=2.0)
+        with torch.amp.autocast(device_type=device_type):
+            yield
+    except Exception:
+        # Fallback for older versions (only CUDA supported there)
+        if device_type == "cuda":
+            with torch.cuda.amp.autocast():
+                yield
+        else:
+            # No autocast on non-cuda older versions
+            yield
 
 
 @dataclass
@@ -136,7 +161,7 @@ def evaluate_linear(encoder, classifier, loader, device, amp=True):
         for images, targets in pbar:
             images = images.to(device)
             targets = targets.to(device)
-            with torch.cuda.amp.autocast(enabled=amp and device.type == "cuda"):
+            with autocast_ctx(amp and device.type == "cuda", device.type):
                 feats = encoder(images)
                 logits = classifier(feats)
                 loss = ce(logits, targets)
@@ -149,30 +174,44 @@ def evaluate_linear(encoder, classifier, loader, device, amp=True):
 
 
 def knn_eval(encoder, train_loader, test_loader, device, k=20, amp=True):
-    # Extract train features & labels
+    """k-NN evaluation with device-safe feature bank construction.
+
+    Builds a (normalized) feature bank from the (supervised) training subset. The
+    bank is first accumulated on CPU to save VRAM, then moved to GPU if possible.
+    During similarity computation we ensure operands share the same device & dtype.
+    """
     encoder.eval()
-    feats = []
-    labels = []
+    bank_feats = []
+    bank_labels = []
     with torch.no_grad():
         for x, y in train_loader:
             x = x.to(device)
-            with torch.cuda.amp.autocast(enabled=amp and device.type == "cuda"):
+            with autocast_ctx(amp and device.type == "cuda", device.type):
                 f = encoder(x)
-            feats.append(F.normalize(f, dim=1).cpu())
-            labels.append(y)
-    feats = torch.cat(feats, 0)
-    labels = torch.cat(labels, 0)
-    # Test
+            bank_feats.append(F.normalize(f.float(), dim=1).cpu())
+            bank_labels.append(y)
+    feats = torch.cat(bank_feats, 0)  # (Ntrain, D) on CPU initially
+    labels = torch.cat(bank_labels, 0)
+    if device.type == "cuda":
+        try:
+            feats = feats.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
+        except RuntimeError:
+            # OOM fallback: keep on CPU
+            feats = feats.cpu(); labels = labels.cpu()
     correct = 0
     n = 0
     with torch.no_grad():
         for x, y in test_loader:
             x = x.to(device)
-            with torch.cuda.amp.autocast(enabled=amp and device.type == "cuda"):
+            with autocast_ctx(amp and device.type == "cuda", device.type):
                 f = encoder(x)
-            f = F.normalize(f, dim=1)
-            sims = f @ feats.T  # (B, Ntrain)
-            topk = sims.topk(k, dim=1).indices  # (B, k)
+            f = F.normalize(f.float(), dim=1)
+            # Align devices & dtypes
+            f_comp = f.to(feats.device) if f.device != feats.device else f
+            feats_comp = feats.to(f_comp.dtype) if feats.dtype != f_comp.dtype else feats
+            sims = f_comp @ feats_comp.T
+            topk = sims.topk(k, dim=1).indices
             pred = torch.mode(labels[topk], dim=1).values
             correct += (pred.cpu() == y).sum().item()
             n += y.size(0)
@@ -225,7 +264,7 @@ def train_linear(cfg: LPConfig):
         for imgs, targets in pbar:
             imgs = imgs.to(device); targets = targets.to(device)
             opt.zero_grad(set_to_none=True)
-            with torch.cuda.amp.autocast(enabled=scaler.is_enabled()):
+            with autocast_ctx(scaler.is_enabled(), device.type):
                 feats = encoder(imgs)
                 logits = classifier(feats)
                 loss = ce(logits, targets)
