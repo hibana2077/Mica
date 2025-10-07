@@ -79,10 +79,34 @@ def build_encoder(ckpt_path: str):
     return encoder, cfg
 
 
-def prepare_loaders(cfg: LPConfig, encoder_model_name: str, seed: int):
-    data_cfg = resolve_data_config({}, model=None)
-    tfm_train = create_transform(**data_cfg, is_training=True)
-    tfm_eval = create_transform(**data_cfg, is_training=False)
+def prepare_loaders(cfg: LPConfig, encoder, seed: int):
+    """Create training & validation DataLoaders.
+
+    Uses timm's resolve_data_config on the already constructed encoder so that
+    the correct default_cfg (input size, normalization stats, interpolation, etc.)
+    is applied. Previously this passed model=None which triggered an assertion
+    in timm (needs model / args / pretrained_cfg). Passing the actual encoder
+    avoids the crash on systems where no explicit data args are provided.
+    """
+    try:
+        data_cfg = resolve_data_config({}, model=encoder)
+        tfm_train = create_transform(**data_cfg, is_training=True)
+        tfm_eval = create_transform(**data_cfg, is_training=False)
+    except Exception as e:
+        # Fallback: basic ImageNet-style transforms if something unexpected occurs.
+        from torchvision import transforms
+        tfm_train = transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ])
+        tfm_eval = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ])
     full_train = datasets.ImageFolder(cfg.train_domain, transform=tfm_train)
     test = datasets.ImageFolder(cfg.test_domain, transform=tfm_eval)
     subset = stratified_subset(full_train, cfg.label_fraction, cfg.per_class_limit, seed)
@@ -153,7 +177,7 @@ def train_linear(cfg: LPConfig):
     encoder.to(device)
     feat_dim = getattr(encoder, "num_features", 2048)
     # Build loaders (train domain subset, test domain full)
-    train_loader, test_loader, classes = prepare_loaders(cfg, enc_cfg["model_name"], cfg.seed)
+    train_loader, test_loader, classes = prepare_loaders(cfg, encoder, cfg.seed)
     classifier = nn.Linear(feat_dim, len(classes)).to(device)
     opt = torch.optim.AdamW(classifier.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     scaler = torch.cuda.amp.GradScaler(enabled=cfg.amp and device.type == "cuda")
