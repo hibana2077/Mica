@@ -19,4 +19,4 @@ python3 src/ssl_vicreg.py \
   --dataset2 dataset/Dataset_2_Cleaned \
   --output_dir output/SSL_resnet50 \
   --model_name resnet50.a1_in1k \
-  --epochs 200 --batch_size 32 --lr 0.002 --lambda_align 1.0 --proj_dim 2048 --proj_hidden 8192 --log_every 100 --no_amp >> S001.log 2>&1
+  --epochs 200 --batch_size 128 --lr 0.002 --lambda_align 1.0 --proj_dim 2048 --proj_hidden 8192 --log_every 100 --no_amp >> S001.log 2>&1
