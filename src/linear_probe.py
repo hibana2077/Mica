@@ -199,15 +199,34 @@ def train_linear(cfg: LPConfig):
 
 def parse_args():
     p = argparse.ArgumentParser(description="Linear Probe on SSL Encoder")
+    from dataclasses import MISSING
     for field in LPConfig.__dataclass_fields__.values():
         name = f"--{field.name}"
+        # Handle booleans with --flag / --no_flag semantics
         if field.type is bool:
-            if getattr(LPConfig, field.name, False):
-                p.add_argument(f"--no_{field.name}", action="store_false", dest=field.name)
-            else:
-                p.add_argument(name, action="store_true")
+            default_val = getattr(LPConfig, field.name)
+            if default_val:  # default True -> create a --no_flag to disable
+                p.add_argument(f"--no_{field.name}", action="store_false", dest=field.name,
+                               help=f"Disable {field.name} (default: enabled)")
+            else:            # default False -> create a --flag to enable
+                p.add_argument(name, action="store_true",
+                               help=f"Enable {field.name} (default: disabled)")
+            continue
+
+        # Non-boolean fields
+        if field.default is MISSING and field.default_factory is MISSING:  # required argument
+            # Assume string type for required path / directory style args
+            p.add_argument(name, required=True, type=str,
+                           help=f"(Required) Value for {field.name}")
         else:
-            p.add_argument(name, type=type(field.default), default=field.default)
+            default_val = field.default
+            # Infer a callable type for argparse based on the default's Python type
+            inferred_type = type(default_val)
+            # Edge case: if default is None, fall back to string
+            if default_val is None:
+                inferred_type = str
+            p.add_argument(name, type=inferred_type, default=default_val,
+                           help=f"Default: {default_val}")
     return p.parse_args()
 
 
