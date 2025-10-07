@@ -97,16 +97,23 @@ class SSLConfig:
 # -------------------------------------------------
 # Data utilities
 # -------------------------------------------------
-def build_ssl_dataloaders(cfg: SSLConfig, model_name: str) -> Tuple[DataLoader, DataLoader, int]:
+def build_ssl_dataloaders(cfg: SSLConfig, encoder: nn.Module) -> Tuple[DataLoader, DataLoader, int]:
     """Create two domain dataloaders (each returns a single image w/ transform).
 
-    Returns consistent class count for potential prototype extensions.
-    """
-    # We only need basic image folder reading; later we apply dual-view augmentation in code.
-    dummy_model_cfg = resolve_data_config({}, model=None)  # Not strictly using timm model here
+    We need an instantiated model so that timm can supply the appropriate
+    data configuration (input size, interpolation, mean/std, etc.). Passing
+    `model=None` to `resolve_data_config` triggers an assertion in recent
+    timm versions, which caused the observed crash. Using the already-built
+    encoder avoids constructing a second temporary model and fixes the issue.
 
-    # Custom augmentation pipeline: we rely on torchvision transforms built by timm convenience.
-    train_tfms = create_transform(**dummy_model_cfg, is_training=True)
+    Returns
+    -------
+    (loader1, loader2, num_classes)
+        Two DataLoaders (half batch each domain) and the shared class count.
+    """
+    # Derive the data config from the actual model so transforms match.
+    model_data_cfg = resolve_data_config({}, model=encoder)
+    train_tfms = create_transform(**model_data_cfg, is_training=True)
 
     ds1 = datasets.ImageFolder(cfg.dataset1, transform=train_tfms)
     ds2 = datasets.ImageFolder(cfg.dataset2, transform=train_tfms)
@@ -115,8 +122,22 @@ def build_ssl_dataloaders(cfg: SSLConfig, model_name: str) -> Tuple[DataLoader, 
 
     # Half-batch per domain
     half = cfg.batch_size // 2
-    loader1 = DataLoader(ds1, batch_size=half, shuffle=True, num_workers=cfg.workers, pin_memory=True, drop_last=True)
-    loader2 = DataLoader(ds2, batch_size=half, shuffle=True, num_workers=cfg.workers, pin_memory=True, drop_last=True)
+    loader1 = DataLoader(
+        ds1,
+        batch_size=half,
+        shuffle=True,
+        num_workers=cfg.workers,
+        pin_memory=True,
+        drop_last=True,
+    )
+    loader2 = DataLoader(
+        ds2,
+        batch_size=half,
+        shuffle=True,
+        num_workers=cfg.workers,
+        pin_memory=True,
+        drop_last=True,
+    )
     return loader1, loader2, num_classes
 
 
@@ -226,8 +247,9 @@ def train(cfg: SSLConfig):
     os.makedirs(cfg.output_dir, exist_ok=True)
     save_json(os.path.join(cfg.output_dir, "ssl_config.json"), asdict(cfg))
 
-    loader1, loader2, _ = build_ssl_dataloaders(cfg, cfg.model_name)
+    # Build model first so we can use it to derive the correct data config.
     encoder, projector, feat_dim = build_encoder_and_projector(cfg)
+    loader1, loader2, _ = build_ssl_dataloaders(cfg, encoder)
     encoder.to(device)
     projector.to(device)
 
