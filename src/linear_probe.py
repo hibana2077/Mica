@@ -110,7 +110,17 @@ def prepare_loaders(cfg: LPConfig, encoder, seed: int):
     full_train = datasets.ImageFolder(cfg.train_domain, transform=tfm_train)
     test = datasets.ImageFolder(cfg.test_domain, transform=tfm_eval)
     subset = stratified_subset(full_train, cfg.label_fraction, cfg.per_class_limit, seed)
-    train_loader = DataLoader(subset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.workers, pin_memory=True, drop_last=True)
+    # If the supervision subset is smaller than batch_size, setting drop_last=True would
+    # drop the only (incomplete) batch, yielding zero iterations and later a div-by-zero.
+    dynamic_drop_last = len(subset) >= cfg.batch_size
+    train_loader = DataLoader(
+        subset,
+        batch_size=cfg.batch_size,
+        shuffle=True,
+        num_workers=cfg.workers,
+        pin_memory=True,
+        drop_last=dynamic_drop_last,
+    )
     val_loader = DataLoader(test, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.workers, pin_memory=True)
     return train_loader, val_loader, full_train.classes
 
@@ -180,7 +190,8 @@ def train_linear(cfg: LPConfig):
     train_loader, test_loader, classes = prepare_loaders(cfg, encoder, cfg.seed)
     classifier = nn.Linear(feat_dim, len(classes)).to(device)
     opt = torch.optim.AdamW(classifier.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    scaler = torch.cuda.amp.GradScaler(enabled=cfg.amp and device.type == "cuda")
+    # Use new torch.amp API (deprecation warning otherwise)
+    scaler = torch.amp.GradScaler(device_type="cuda", enabled=cfg.amp and device.type == "cuda")
     ce = nn.CrossEntropyLoss()
     best_acc = -1
     log_path = os.path.join(cfg.output_dir, "lp_log.jsonl")
@@ -208,6 +219,13 @@ def train_linear(cfg: LPConfig):
             run_acc += top1 * bs
             seen += bs
             pbar.set_postfix({"loss": f"{run_loss/seen:.3f}", "acc": f"{run_acc/seen:.2f}"})
+        if seen == 0:
+            # This should not happen anymore due to dynamic_drop_last logic, but guard just in case.
+            # Provide actionable feedback about likely cause.
+            raise RuntimeError(
+                "No training batches were processed (seen=0). Likely the supervision subset is smaller "
+                "than batch_size and was dropped. Reduce --batch_size or increase label_fraction/per_class_limit."
+            )
         train_loss = run_loss / seen; train_acc = run_acc / seen
         test_metrics = evaluate_linear(encoder, classifier, test_loader, device, amp=scaler.is_enabled())
         log_entry = {"epoch": epoch, "train_loss": train_loss, "train_acc": train_acc, **{f"test_{k}": v for k,v in test_metrics.items()}}
