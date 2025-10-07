@@ -373,20 +373,35 @@ def parse_args():
     p = argparse.ArgumentParser(description="VICReg + Domain Alignment SSL")
     for field in SSLConfig.__dataclass_fields__.values():
         name = f"--{field.name}"
-        if field.type is bool:
-            # Handle boolean flags
-            default_val = field.default
+        default_val = field.default
+        
+        # Check if it's a boolean type
+        # Note: due to `from __future__ import annotations`, field.type is a string
+        is_bool = field.type == 'bool' or field.type is bool
+        
+        if is_bool:
+            # Handle boolean flags - they should never expect an argument
             if field.name.startswith('no_'):
-                # For no_* flags, add the flag itself to set True (disable feature)
-                p.add_argument(name, action="store_true", default=default_val)
-            elif default_val:
-                # If default is True, provide --no_* flag to set False
-                p.add_argument(f"--no_{field.name}", action="store_false", dest=field.name, default=default_val)
+                # For no_* flags (like no_amp), the flag enables the feature (sets to True)
+                p.add_argument(name, action="store_true", default=default_val, 
+                             help=f"Default: {default_val}")
             else:
-                # If default is False, provide flag to set True
-                p.add_argument(name, action="store_true", default=default_val)
+                # For regular boolean flags, use store_true/store_false based on default
+                if default_val:
+                    # If default is True, provide --no_X flag to disable it
+                    p.add_argument(f"--no_{field.name}", dest=field.name, action="store_false", 
+                                 default=default_val, help=f"Set to False (default: {default_val})")
+                else:
+                    # If default is False, provide --X flag to enable it
+                    p.add_argument(name, action="store_true", default=default_val, 
+                                 help=f"Default: {default_val}")
+        elif default_val is None:
+            # Handle optional arguments (like resume: str | None)
+            p.add_argument(name, type=str, default=None, help=f"Default: None")
         else:
-            p.add_argument(name, type=type(field.default), default=field.default)
+            # Handle regular arguments with non-None defaults
+            p.add_argument(name, type=type(default_val), default=default_val, 
+                         help=f"Default: {default_val}")
     return p.parse_args()
 
 
