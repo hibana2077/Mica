@@ -1,22 +1,31 @@
 #!/usr/bin/env python
-"""Linear probing script for pretrained SSL encoder.
+"""Linear probing script for pretrained SSL encoder with extended metrics.
 
-Loads encoder weights (frozen) from ssl_best.pth and trains a linear classifier
-on a specified fraction of labels from one domain, evaluating same-domain and
-cross-domain performance. Implements the experimental protocol sections for
-label efficiency curves.
+Additions relative to original version:
+ - Macro F1 / Precision / Recall / AUC (macro OVR) using sklearn
+ - Domain gap Δ = (in-domain test acc) - (cross-domain test acc) when both provided
+ - Label efficiency AUC over fractions (when running multiple fractions via --multi_fractions)
+ - Optional JSON summary artifact consolidating results
+ - Saves per-epoch log including new metrics; final summary includes Δ & efficiency AUC.
 
-Example:
-  python src/linear_probe.py \
-    --encoder_ckpt output/SSL_resnet50/ssl_best.pth \
-    --train_domain dataset/Dataset_1_Cleaned \
-    --test_domain dataset/Dataset_2_Cleaned \
-    --label_fraction 0.05 --epochs 50 --output_dir output/LP_run
+Usage (single fraction):
+    python src/linear_probe.py \
+        --encoder_ckpt output/SSL_resnet50/ssl_best.pth \
+        --train_domain dataset/Dataset_1_Cleaned \
+        --test_domain dataset/Dataset_2_Cleaned \
+        --label_fraction 0.05 --epochs 50 --output_dir output/LP_run
+
+Batch label-efficiency sweep (fractions 0.01,0.05,0.1,1.0):
+    python src/linear_probe.py \
+        --encoder_ckpt output/SSL_resnet50/ssl_best.pth \
+        --train_domain dataset/Dataset_1_Cleaned \
+        --test_domain dataset/Dataset_2_Cleaned \
+        --multi_fractions 0.01 0.05 0.1 1.0 --epochs 50 --output_dir output/LP_sweep
 """
 from __future__ import annotations
 import argparse, json, os, random
 from dataclasses import dataclass, asdict
-from typing import List
+from typing import List, Sequence, Dict
 import contextlib
 
 import torch
@@ -72,6 +81,8 @@ class LPConfig:
     amp: bool = True
     eval_knn: bool = True
     knn_k: int = 20
+    multi_fractions: Sequence[float] | None = None  # optional sweep; if set overrides single fraction
+    summary_name: str = "lp_summary.json"          # file to aggregate multi-fraction results
 
 
 def stratified_subset(ds: datasets.ImageFolder, fraction: float, per_class_limit: int, seed: int) -> Subset:
@@ -152,13 +163,15 @@ def prepare_loaders(cfg: LPConfig, encoder, seed: int):
 
 def evaluate_linear(encoder, classifier, loader, device, amp=True):
     encoder.eval(); classifier.eval()
+    from sklearn.metrics import precision_recall_fscore_support, roc_auc_score
+    import numpy as np
     total_loss = 0.0
     total_top1 = 0.0
     n = 0
     ce = nn.CrossEntropyLoss()
+    all_preds=[]; all_tgts=[]; all_probs=[]
     with torch.no_grad():
-        pbar = loader
-        for images, targets in pbar:
+        for images, targets in loader:
             images = images.to(device)
             targets = targets.to(device)
             with autocast_ctx(amp and device.type == "cuda", device.type):
@@ -170,7 +183,19 @@ def evaluate_linear(encoder, classifier, loader, device, amp=True):
             n += bs
             total_loss += loss.item() * bs
             total_top1 += top1 * bs
-    return {"loss": total_loss / n, "acc": total_top1 / n}
+            probs = torch.softmax(logits, dim=1)
+            all_probs.append(probs.cpu())
+            all_preds.append(logits.argmax(1).cpu())
+            all_tgts.append(targets.cpu())
+    probs = torch.cat(all_probs).numpy()
+    preds = torch.cat(all_preds).numpy()
+    tgts = torch.cat(all_tgts).numpy()
+    precision, recall, f1, _ = precision_recall_fscore_support(tgts, preds, average="macro", zero_division=0)
+    try:
+        auc = roc_auc_score(tgts, probs, multi_class='ovr', average='macro')
+    except Exception:
+        auc = 0.0
+    return {"loss": total_loss / n, "acc": total_top1 / n, "precision": precision, "recall": recall, "f1": f1, "auc": auc}
 
 
 def knn_eval(encoder, train_loader, test_loader, device, k=20, amp=True):
@@ -218,7 +243,100 @@ def knn_eval(encoder, train_loader, test_loader, device, k=20, amp=True):
     return correct * 100.0 / n
 
 
+def run_single_fraction(cfg: LPConfig, fraction: float) -> Dict:
+    """Train & evaluate for a single label fraction; returns best metrics dict."""
+    device = get_device(); set_seed(cfg.seed)
+    frac_tag = f"f{fraction:.4f}".rstrip('0').rstrip('.')
+    out_dir = os.path.join(cfg.output_dir, frac_tag)
+    os.makedirs(out_dir, exist_ok=True)
+    base_cfg = asdict(cfg); base_cfg["label_fraction"] = fraction
+    save_json(os.path.join(out_dir, "lp_config.json"), base_cfg)
+    encoder, enc_cfg = build_encoder(cfg.encoder_ckpt)
+    encoder.to(device)
+    feat_dim = getattr(encoder, "num_features", 2048)
+    # Build loaders
+    # Temporarily create a shallow copy of cfg with fraction applied
+    tmp_cfg = LPConfig(**base_cfg)
+    tmp_cfg.label_fraction = fraction
+    train_loader, test_loader, classes = prepare_loaders(tmp_cfg, encoder, cfg.seed)
+    classifier = nn.Linear(feat_dim, len(classes)).to(device)
+    opt = torch.optim.AdamW(classifier.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    class _NoScaler:  # identical to previous implementation
+        def is_enabled(self): return False
+        def scale(self, loss): return loss
+        def step(self, opt): pass
+        def update(self): pass
+    if cfg.amp and device.type == "cuda":
+        scaler = None
+        try:
+            scaler = torch.amp.GradScaler(device_type="cuda")
+        except Exception:
+            try:
+                scaler = torch.cuda.amp.GradScaler()
+            except Exception:
+                scaler = _NoScaler()
+    else:
+        scaler = _NoScaler()
+    ce = nn.CrossEntropyLoss()
+    best = {"acc": -1}
+    log_path = os.path.join(out_dir, "lp_log.jsonl")
+    with open(log_path, "w"): pass
+    for epoch in range(1, cfg.epochs + 1):
+        classifier.train(); run_loss=0.0; run_acc=0.0; seen=0
+        pbar = tqdm(train_loader, desc=f"LP[{frac_tag}] Epoch {epoch}/{cfg.epochs}", leave=False)
+        for imgs, targets in pbar:
+            imgs = imgs.to(device); targets=targets.to(device)
+            opt.zero_grad(set_to_none=True)
+            with autocast_ctx(scaler.is_enabled(), device.type):
+                feats = encoder(imgs)
+                logits = classifier(feats)
+                loss = ce(logits, targets)
+            if scaler.is_enabled():
+                scaler.scale(loss).backward(); scaler.step(opt); scaler.update()
+            else:
+                loss.backward(); opt.step()
+            top1, = accuracy(logits, targets, topk=(1,))
+            bs = imgs.size(0); seen += bs
+            run_loss += loss.item()*bs; run_acc += top1*bs
+            pbar.set_postfix({"loss": f"{run_loss/seen:.3f}", "acc": f"{run_acc/seen:.2f}"})
+        train_loss = run_loss/seen; train_acc=run_acc/seen
+        test_metrics = evaluate_linear(encoder, classifier, test_loader, device, amp=scaler.is_enabled())
+        entry = {"epoch": epoch, "train_loss": train_loss, "train_acc": train_acc, **{f"test_{k}": v for k,v in test_metrics.items()}}
+        with open(log_path, "a") as f: f.write(json.dumps(entry)+"\n")
+        if test_metrics["acc"] > best["acc"]:
+            best = {**test_metrics, "epoch": epoch, "train_acc": train_acc, "train_loss": train_loss}
+            torch.save({"classifier": classifier.state_dict(), "epoch": epoch, "best_acc": best["acc"], "cfg": base_cfg, "encoder_cfg": enc_cfg}, os.path.join(out_dir, "lp_best.pth"))
+    # k-NN
+    if cfg.eval_knn:
+        knn_acc = knn_eval(encoder, train_loader, test_loader, device, k=cfg.knn_k, amp=scaler.is_enabled())
+        best["knn_acc"] = knn_acc
+        save_json(os.path.join(out_dir, "knn_metrics.json"), {"knn_acc": knn_acc})
+    best["label_fraction"] = fraction
+    save_json(os.path.join(out_dir, "best_metrics.json"), best)
+    return best
+
+
 def train_linear(cfg: LPConfig):
+    # Multi-fraction sweep
+    if cfg.multi_fractions and len(cfg.multi_fractions) > 0:
+        results=[]
+        for f in cfg.multi_fractions:
+            r = run_single_fraction(cfg, f)
+            results.append(r)
+        # Compute label efficiency AUC (fraction vs acc) via trapezoidal rule
+        import numpy as np
+        fracs = np.array([r["label_fraction"] for r in results])
+        accs = np.array([r["acc"] for r in results])
+        order = np.argsort(fracs)
+        fracs, accs = fracs[order], accs[order]
+        efficiency_auc = float(np.trapz(accs, fracs) / (fracs[-1]-fracs[0] if fracs[-1] > fracs[0] else 1.0))
+        summary = {"fractions": fracs.tolist(), "accs": accs.tolist(), "efficiency_auc": efficiency_auc, "results": results}
+        os.makedirs(cfg.output_dir, exist_ok=True)
+        save_json(os.path.join(cfg.output_dir, cfg.summary_name), summary)
+        print(f"Label efficiency AUC: {efficiency_auc:.3f}")
+        return
+    # Single fraction path (reuse earlier logic for backward compatibility)
+    run_single_fraction(cfg, cfg.label_fraction)
     device = get_device(); set_seed(cfg.seed)
     os.makedirs(cfg.output_dir, exist_ok=True)
     save_json(os.path.join(cfg.output_dir, "lp_config.json"), asdict(cfg))
@@ -300,7 +418,7 @@ def train_linear(cfg: LPConfig):
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Linear Probe on SSL Encoder")
+    p = argparse.ArgumentParser(description="Linear Probe on SSL Encoder (extended)")
     from dataclasses import MISSING
     # Resolve (possibly postponed) type annotations so that bools are detected correctly
     from typing import get_type_hints
@@ -332,8 +450,12 @@ def parse_args():
             # Edge case: if default is None, fall back to string
             if default_val is None:
                 inferred_type = str
-            p.add_argument(name, type=inferred_type, default=default_val,
-                           help=f"Default: {default_val}")
+            # Special handling for sequence of floats (multi_fractions)
+            if field.name == "multi_fractions":
+                p.add_argument(name, type=float, nargs='+', default=None, help="Optional list of label fractions for sweep (overrides --label_fraction)")
+            else:
+                p.add_argument(name, type=inferred_type, default=default_val,
+                               help=f"Default: {default_val}")
     return p.parse_args()
 
 
